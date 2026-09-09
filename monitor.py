@@ -135,7 +135,11 @@ def load_previous_state():
     return None
 
 
-def save_current_state(state):
+def save_current_state(sessions, force_notify_runs=0):
+    state = {
+        "force_notify_runs": force_notify_runs,
+        "sessions": sessions
+    }
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
@@ -154,13 +158,24 @@ def main():
     
     if prev_state is None:
         print("[INFO] Prima esecuzione o file di stato assente. Inizializzazione...")
-        save_current_state(current_sessions)
+        # Impostiamo 2 controlli di test con notifica forzata per le prossime esecuzioni
+        save_current_state(current_sessions, force_notify_runs=2)
         welcome_header = "🤖 *Bot Monitoraggio Linguaviva Attivo!*"
         msg = build_telegram_summary(current_sessions, welcome_header)
         send_telegram_message(msg)
         return
 
-    prev_map = {s["key"]: s for s in prev_state}
+    if isinstance(prev_state, dict):
+        force_runs = prev_state.get("force_notify_runs", 0)
+        prev_sessions = prev_state.get("sessions", [])
+    elif isinstance(prev_state, list):
+        force_runs = 0
+        prev_sessions = prev_state
+    else:
+        force_runs = 0
+        prev_sessions = []
+
+    prev_map = {s["key"]: s for s in prev_sessions}
     curr_map = {s["key"]: s for s in current_sessions}
 
     has_changes = False
@@ -184,10 +199,20 @@ def main():
         header = "📢 *AGGIORNAMENTO LINGUAVIVA!*\n" + "\n".join(change_reasons)
         full_msg = build_telegram_summary(current_sessions, header)
         send_telegram_message(full_msg)
+        if force_runs > 0:
+            force_runs -= 1
     else:
-        print("[INFO] Nessun cambiamento rilevato rispetto all'ultimo controllo.")
+        if force_runs > 0:
+            force_runs -= 1
+            run_num = 2 - force_runs
+            print(f"[INFO] Notifica di test forzata ({run_num}/2)...")
+            header = f"🧪 *[TEST AUTOMAZIONE - VERIFICA #{run_num}/2]*\nNessuna variazione sul sito, ma l'automazione schedulata funziona regolarmente! ✅"
+            full_msg = build_telegram_summary(current_sessions, header)
+            send_telegram_message(full_msg)
+        else:
+            print("[INFO] Nessun cambiamento rilevato rispetto all'ultimo controllo.")
 
-    save_current_state(current_sessions)
+    save_current_state(current_sessions, force_notify_runs=force_runs)
 
 
 if __name__ == "__main__":
