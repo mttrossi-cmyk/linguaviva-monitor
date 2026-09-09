@@ -107,8 +107,8 @@ def build_telegram_summary(sessions_list, header_title=""):
     if header_title:
         lines.append(header_title)
         lines.append("")
-
-    lines.append("📋 *RIEPILOGO SESSIONI OFA TEST POLIMI:*")
+   
+    lines.append("📋 *Riepilogo sessioni OFA TEST POLIMI:*")
     lines.append(" ")
     lines.append("──────────────────────────")
 
@@ -120,7 +120,7 @@ def build_telegram_summary(sessions_list, header_title=""):
 
     lines.append("──────────────────────────")
     lines.append(" ")
-    lines.append(f"🔗 [Prenota SUBITO su Linguaviva]({URL})")
+    lines.append(f"🔗 [Prenota su Linguaviva]({URL})")
     
     return "\n".join(lines)
 
