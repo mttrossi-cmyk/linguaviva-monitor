@@ -4,7 +4,6 @@ import json
 import requests
 from bs4 import BeautifulSoup
 
-# Riconfigura l'output di sistema in UTF-8 per supportare emoji ed elenchi speciali su Windows/Linux
 if sys.stdout.encoding != 'utf-8':
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -13,7 +12,6 @@ if sys.stdout.encoding != 'utf-8':
         pass
 
 URL = "https://www.linguaviva.net/it/sessioni?exam=ofa-test-polimi"
-
 STATE_FILE = "last_sessions.json"
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -21,10 +19,8 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 
 def send_telegram_message(message: str):
-    """Invia un messaggio Telegram tramite la Bot API."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("[WARN] Token Telegram o Chat ID non impostati. Messaggio non inviato:")
-        print(message)
+        print("[WARN] Token Telegram o Chat ID non impostati.")
         return False
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -46,7 +42,6 @@ def send_telegram_message(message: str):
 
 
 def fetch_sessions():
-    """Scarica la pagina ed estrae tutte le sessioni di esame presenti."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -59,36 +54,37 @@ def fetch_sessions():
     soup = BeautifulSoup(response.text, "html.parser")
     sessions = []
 
-    # Cerchiamo tutti i blocchi d'esame
-    # Ciascuna riga ha la classe 'flex items-center gap-5' o contiene elementi d'esame
-    # Usiamo una ricerca flessibile per catturare la struttura
     blocks = soup.find_all("div", class_=lambda c: c and "items-center" in c and "gap-5" in c)
 
     for block in blocks:
         text_block = block.get_text(separator=" ", strip=True)
-        # Verifichiamo che sia un blocco relativo a un appello d'esame
         if "OFA Test Polimi" in text_block or any(m in text_block for m in ["GEN", "FEB", "MAR", "APR", "MAG", "GIU", "LUG", "AGO", "SET", "OTT", "NOV", "DIC"]):
-            # Estrazione Mese e Giorno
             month_elem = block.find("span", class_=lambda c: c and "uppercase" in c)
             day_elem = block.find("span", class_=lambda c: c and "leading-none" in c)
             title_elem = block.find(["h3", "h4", "div"], class_=lambda c: c and ("font-serif" in c or "font-semibold" in c))
 
             month = month_elem.get_text(strip=True) if month_elem else ""
             day = day_elem.get_text(strip=True) if day_elem else ""
-            title = title_elem.get_text(strip=True) if title_elem else "Esame"
+            title = title_elem.get_text(strip=True) if title_elem else "OFA Test Polimi"
 
-            # Estrazione orari/dettagli dal testo
             full_text = block.get_text(separator=" | ", strip=True)
 
-            # Verifica stato (Aperto vs Chiuso)
-            is_open = True
             if "Iscrizioni chiuse" in full_text or "Esaurito" in full_text:
                 is_open = False
-                status_str = "🔴 Iscrizioni chiuse"
+                status_icon = "🔴"
+                status_label = "Iscrizioni chiuse"
             else:
-                status_str = "🟢 ISCRIZIONI APERTE / POSTI DISPONIBILI"
+                is_open = True
+                status_icon = "🟢"
+                status_label = "POSTI DISPONIBILI / PRENOTABILE!"
 
-            # Costruiamo una chiave unica per identificare la sessione
+            details = []
+            if "Home Edition" in full_text:
+                details.append("🏠 Home Edition")
+            if "15:30" in full_text:
+                details.append("🕒 Ore 15:30")
+
+            details_str = " - " + " ".join(details) if details else ""
             session_key = f"{day} {month} - {title}"
             
             sessions.append({
@@ -97,15 +93,37 @@ def fetch_sessions():
                 "month": month,
                 "title": title,
                 "is_open": is_open,
-                "status_str": status_str,
+                "status_icon": status_icon,
+                "status_label": status_label,
+                "details_str": details_str,
                 "raw_text": full_text
             })
 
     return sessions
 
 
+def build_telegram_summary(sessions_list, header_title=""):
+    lines = []
+    if header_title:
+        lines.append(header_title)
+        lines.append("")
+
+    lines.append("📋 *RIEPILOGO SESSIONI OFA TEST POLIMI:*")
+    lines.append("──────────────────────────")
+
+    if not sessions_list:
+        lines.append("⚠️ _Nessuna sessione trovata al momento sul sito._")
+    else:
+        for s in sessions_list:
+            lines.append(f"{s['status_icon']} *{s['day']} {s['month']}* | {s['status_label']}{s['details_str']}")
+
+    lines.append("──────────────────────────")
+    lines.append(f"🔗 [PRENOTA SUBITO SU LINGUAVIVA]({URL})")
+    
+    return "\n".join(lines)
+
+
 def load_previous_state():
-    """Carica lo stato precedente dal file JSON."""
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, "r", encoding="utf-8") as f:
@@ -116,7 +134,6 @@ def load_previous_state():
 
 
 def save_current_state(state):
-    """Salva lo stato corrente nel file JSON."""
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
@@ -131,64 +148,43 @@ def main():
         sys.exit(1)
 
     print(f"[INFO] Trovate {len(current_sessions)} sessioni nella pagina.")
-    for s in current_sessions:
-        print(f"  - [{s['status_str']}] {s['key']} ({s['raw_text']})")
-
     prev_state = load_previous_state()
     
-    # Se è la primissima esecuzione (non esiste ancora last_sessions.json)
     if prev_state is None:
-        print("[INFO] Prima esecuzione rilevata. Inizializzazione file di stato...")
+        print("[INFO] Prima esecuzione o file di stato assente. Inizializzazione...")
         save_current_state(current_sessions)
-        
-        # Inviamo un messaggio di benvenuto/conferma
-        welcome_msg = (
-            "🤖 *Bot Monitoraggio Linguaviva Attivato!*\n\n"
-            f"Trovate inizialmente *{len(current_sessions)} sessioni* per OFA Test Polimi.\n"
-            "Riceverai una notifica non appena sarà pubblicata una nuova data o si apriranno le iscrizioni!\n\n"
-            f"🔗 [Apri Sito Linguaviva]({URL})"
-        )
-        send_telegram_message(welcome_msg)
+        welcome_header = "🤖 *Bot Monitoraggio Linguaviva Attivo!*"
+        msg = build_telegram_summary(current_sessions, welcome_header)
+        send_telegram_message(msg)
         return
 
-    # Mappiamo le vecchie sessioni per chiave
     prev_map = {s["key"]: s for s in prev_state}
     curr_map = {s["key"]: s for s in current_sessions}
 
-    notifications = []
+    has_changes = False
+    change_reasons = []
 
-    # 1. Controllo nuove sessioni o riaperture
     for key, curr in curr_map.items():
         if key not in prev_map:
-            # NUOVA SESSIONE TROVATA!
-            status_icon = "🚨 *NUOVA DATA DISPONIBILE!*" if curr["is_open"] else "ℹ️ *Nuova data inserita (ancora chiusa)*"
-            notifications.append(
-                f"{status_icon}\n"
-                f"📅 *Data:* {curr['key']}\n"
-                f"📌 *Stato:* {curr['status_str']}\n"
-                f"📝 *Dettagli:* {curr['raw_text']}"
-            )
+            has_changes = True
+            if curr["is_open"]:
+                change_reasons.append(f"🚨 *NUOVA DATA DISPONIBILE:* {curr['key']}")
+            else:
+                change_reasons.append(f"ℹ️ *Nuova data inserita:* {curr['key']}")
         else:
             prev = prev_map[key]
-            # Se la sessione era chiusa ed ora è aperta!
-            if not prev["is_open"] and curr["is_open"]:
-                notifications.append(
-                    f"🎉 *ISCRIZIONI APERTE!*\n"
-                    f"📅 *Data:* {curr['key']}\n"
-                    f"📌 *Stato:* {curr['status_str']}\n"
-                    f"📝 *Dettagli:* {curr['raw_text']}"
-                )
+            if not prev.get("is_open", False) and curr["is_open"]:
+                has_changes = True
+                change_reasons.append(f"🎉 *ISCRIZIONI APERTE:* {curr['key']}")
 
-    # Se ci sono modifiche rilevanti, inviamo le notifiche
-    if notifications:
-        print(f"[INFO] Trovate {len(notifications)} novità! Invio notifiche...")
-        for notif in notifications:
-            full_msg = f"{notif}\n\n👉 [PRENOTA SUBITO SU LINGUAVIVA]({URL})"
-            send_telegram_message(full_msg)
+    if has_changes:
+        print(f"[INFO] Trovati cambiamenti! Inviando la notifica...")
+        header = "📢 *AGGIORNAMENTO LINGUAVIVA!*\n" + "\n".join(change_reasons)
+        full_msg = build_telegram_summary(current_sessions, header)
+        send_telegram_message(full_msg)
     else:
         print("[INFO] Nessun cambiamento rilevato rispetto all'ultimo controllo.")
 
-    # Aggiorniamo sempre lo stato corrente
     save_current_state(current_sessions)
 
 
