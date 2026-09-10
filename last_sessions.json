@@ -1,0 +1,16 @@
+{
+  "force_notify_runs": 2,
+  "sessions": [
+    {
+      "key": "14 SET - OFA Test Polimi",
+      "day": "14",
+      "month": "SET",
+      "title": "OFA Test Polimi",
+      "is_open": false,
+      "status_icon": "🔴",
+      "status_label": "Iscrizioni chiuse",
+      "details_str": " - 🏠 Home Edition 🕒 Ore 15:30",
+      "raw_text": "SET | 14 | OFA Test Polimi | 15:30 | Home Edition | Iscrizioni chiuse"
+    }
+  ]
+}
