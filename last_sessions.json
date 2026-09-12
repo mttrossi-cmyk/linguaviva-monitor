@@ -17,11 +17,11 @@
       "day": "17",
       "month": "SET",
       "title": "OFA Test Polimi",
-      "is_open": false,
-      "status_icon": "🔴",
-      "status_label": "Iscrizioni chiuse",
-      "details_str": " - 🏠 Home Edition",
-      "raw_text": "SET | 17 | OFA Test Polimi | 15:00 | Home Edition | Iscrizioni chiuse"
+      "is_open": true,
+      "status_icon": "🟢",
+      "status_label": "POSTI DISPONIBILI / PRENOTABILE!",
+      "details_str": " - 🏠 Home Edition 🕒 Ore 15:30",
+      "raw_text": "SET | 17 | OFA Test Polimi | 15:30 | Home Edition | 3 posti rimanenti | 29,00 € | Aggiungi al carrello | Acquista ora"
     }
   ]
 }
