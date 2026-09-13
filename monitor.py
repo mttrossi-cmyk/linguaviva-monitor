@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import re
 import requests
 from bs4 import BeautifulSoup
 
@@ -69,6 +70,15 @@ def fetch_sessions():
 
             full_text = block.get_text(separator=" | ", strip=True)
 
+            seats_count = None
+            seats_str = ""
+            seats_match = re.search(r'(\d+)\s*post[io]\s*disponibil[ie]', full_text, re.IGNORECASE)
+            if not seats_match:
+                seats_match = re.search(r'post[io]\s*disponibil[ie]:?\s*(\d+)', full_text, re.IGNORECASE)
+            if seats_match:
+                seats_count = int(seats_match.group(1))
+                seats_str = f"{seats_count} posti disponibili" if seats_count != 1 else "1 posto disponibile"
+
             if "Iscrizioni chiuse" in full_text or "Esaurito" in full_text:
                 is_open = False
                 status_icon = "🔴"
@@ -76,7 +86,10 @@ def fetch_sessions():
             else:
                 is_open = True
                 status_icon = "🟢"
-                status_label = "POSTI DISPONIBILI / PRENOTABILE!"
+                if seats_str:
+                    status_label = seats_str
+                else:
+                    status_label = "POSTI DISPONIBILI / PRENOTABILE!"
 
             details = []
             if "Home Edition" in full_text:
@@ -93,6 +106,8 @@ def fetch_sessions():
                 "month": month,
                 "title": title,
                 "is_open": is_open,
+                "seats": seats_count,
+                "seats_str": seats_str,
                 "status_icon": status_icon,
                 "status_label": status_label,
                 "details_str": details_str,
@@ -158,7 +173,6 @@ def main():
     
     if prev_state is None:
         print("[INFO] Prima esecuzione o file di stato assente. Inizializzazione...")
-        # Impostiamo 2 controlli di test con notifica forzata per le prossime esecuzioni
         save_current_state(current_sessions, force_notify_runs=2)
         welcome_header = "🤖 *Bot Monitoraggio Linguaviva Attivo!*"
         msg = build_telegram_summary(current_sessions, welcome_header)
@@ -185,14 +199,34 @@ def main():
         if key not in prev_map:
             has_changes = True
             if curr["is_open"]:
-                change_reasons.append(f"🚨 *NUOVA DATA DISPONIBILE:* {curr['key']}")
+                seats_info = f" ({curr['seats_str']})" if curr.get("seats_str") else ""
+                change_reasons.append(f"🚨 *NUOVA DATA DISPONIBILE:* {curr['key']}{seats_info}")
             else:
-                change_reasons.append(f"ℹ️ *Nuova data inserita:* {curr['key']}")
+                change_reasons.append(f"ℹ️ *Nuova data inserita (chiusa):* {curr['key']}")
         else:
             prev = prev_map[key]
+            # Caso 1: Da iscrizioni chiuse ad aperte
             if not prev.get("is_open", False) and curr["is_open"]:
                 has_changes = True
-                change_reasons.append(f"🎉 *ISCRIZIONI APERTE:* {curr['key']}")
+                seats_info = f" ({curr['seats_str']})" if curr.get("seats_str") else ""
+                change_reasons.append(f"🎉 *ISCRIZIONI APERTE:* {curr['key']}{seats_info}")
+            # Caso 2: Da iscrizioni aperte a chiuse
+            elif prev.get("is_open", False) and not curr["is_open"]:
+                has_changes = True
+                change_reasons.append(f"🔒 *ISCRIZIONI CHIUSE:* {curr['key']}")
+            # Caso 3: Entrambe aperte, ma variazione nei posti disponibili
+            elif curr["is_open"] and prev.get("is_open"):
+                prev_seats = prev.get("seats")
+                curr_seats = curr.get("seats")
+                if prev_seats is not None and curr_seats is not None and prev_seats != curr_seats:
+                    has_changes = True
+                    change_reasons.append(f"📊 *VARIAZIONE POSTI ({prev_seats} ➡️ {curr_seats} posti):* {curr['key']}")
+
+    # Caso 4: Sessione rimossa dal sito
+    for key, prev in prev_map.items():
+        if key not in curr_map:
+            has_changes = True
+            change_reasons.append(f"🗑️ *SESSIONE RIMOSSA DAL SITO:* {prev['key']}")
 
     if has_changes:
         print(f"[INFO] Trovati cambiamenti! Inviando la notifica...")
@@ -206,7 +240,7 @@ def main():
             force_runs -= 1
             run_num = 2 - force_runs
             print(f"[INFO] Notifica di test forzata ({run_num}/2)...")
-            header = f"🧪 *[TEST AUTOMAZIONE - VERIFICA #{run_num}/2]*\nNessuna variazione sul sito, ma l'automazione schedulata funziona regolarmente! ✅"
+            header = f"🧪 *[TEST AUTOMAZIONE - VERIFICA #{run_num}/2]*\nNessuna variazione sul sito, ma l'automazione schedulata funciona regolarmente! ✅"
             full_msg = build_telegram_summary(current_sessions, header)
             send_telegram_message(full_msg)
         else:
