@@ -1,0 +1,30 @@
+{
+  "sessions": [
+    {
+      "key": "17 SET - OFA Test Polimi",
+      "day": "17",
+      "month": "SET",
+      "title": "OFA Test Polimi",
+      "is_open": false,
+      "seats": null,
+      "seats_str": "",
+      "status_icon": "🔴",
+      "status_label": "Iscrizioni chiuse",
+      "details_str": " - 🏠 Home Edition 🕒 Ore 15:30",
+      "raw_text": "SET | 17 | OFA Test Polimi | 15:30 | Home Edition | Iscrizioni chiuse"
+    },
+    {
+      "key": "18 SET - OFA Test Polimi",
+      "day": "18",
+      "month": "SET",
+      "title": "OFA Test Polimi",
+      "is_open": false,
+      "seats": null,
+      "seats_str": "",
+      "status_icon": "🔴",
+      "status_label": "Iscrizioni chiuse",
+      "details_str": " - 🏠 Home Edition",
+      "raw_text": "SET | 18 | OFA Test Polimi | 16:00 | Home Edition | Iscrizioni chiuse"
+    }
+  ]
+}
