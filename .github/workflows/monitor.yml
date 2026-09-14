@@ -1,10 +1,8 @@
 name: Linguaviva Session Monitor
 
 on:
-  schedule:
-    # Esegue lo script ogni 15 minuti (più affidabile su GitHub Actions)
-    - cron: '*/15 * * * *'
   workflow_dispatch:
+  repository_dispatch:
 
 permissions:
   contents: write
